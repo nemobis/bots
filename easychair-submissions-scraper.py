@@ -27,7 +27,7 @@ for url in urls:
 	surnames = sub.xpath('//b[text()="Authors"]/../../..//tr[@id!="row37"]/td[2]/text()')
 	countries = sub.xpath('//b[text()="Authors"]/../../..//tr[@id!="row37"]/td[4]/text()')
 	topic = sub.xpath('//span[text()="Topics:"]/../../td[2]/text()')[0].strip()
-	abstract = sub.xpath('//td[text()="Abstract:"]/../td[2]/text()')[0].strip()
+	abstract = sub.xpath('//td[text()="Abstract:"]/../td[2]/text()')
 	result = sub.xpath('//td[text()="Decision:"]/../td[2]/text()')[0].strip()
 	keywords = sub.xpath('//div[parent::td[@class="value"]]/text()')
 	number = re.findall("[0-9]+", sub.xpath('//div[@class="pagetitle"]/text()')[0])[0]
@@ -56,6 +56,6 @@ START
 |result= %s
 }}
 END
-""" % (pagetitle, number, title, authors, ";".join(countries), topic, categories, abstract, result)
+""" % (pagetitle, number, title, authors, "; ".join(countries), topic, categories, "\n\n".join(abstract), result)
 
 	export.write(to_bytes(template))
