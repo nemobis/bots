@@ -12,7 +12,7 @@ import pywikibot
 import pywikibot.data.api
 from pywikibot import config
 from upload import UploadRobot
-#import sys
+import sys
 import os
 #import re
 from collections import namedtuple
@@ -42,7 +42,7 @@ class CiboRobot:
             return
 
         for row in titles:
-            commons = "%s - Musei del cibo - %s - %s.tif" % (row.nome, row.museo, row.inventario)
+            commons = "%s - Musei del cibo - %s - %s.jpg" % (row.nome, row.museo, row.inventario)
             description = u"""
 {{Musei del cibo
 | museo = %s
@@ -55,14 +55,15 @@ class CiboRobot:
 | descrizione = %s
 | provenienza = %s
 | note = %s
+| bibliografia = %s
 }}
 """ % (row.museo, row.inventario, row.nome, row.ambito, row.epoca,
-    row.dimensioni, row.materia, row.descrizione, row.provenienza, row.note)
+    row.dimensioni, row.materia, row.descrizione, row.provenienza, row.note, row.biblio)
 
             try:
-                upload = UploadRobot(row.inventario + ".tif", description=description,
+                upload = UploadRobot(row.inventario + ".jpg", description=description,
                                      useFilename=commons, keepFilename=True,
-                                     verifyDescription=False, ignoreWarning=True, aborts=True)
+                                     verifyDescription=False, ignoreWarning=False, aborts=True)
                 upload.run()
             except:
                 pywikibot.output("ERROR: The upload could not be completed.")
