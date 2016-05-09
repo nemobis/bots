@@ -13,7 +13,7 @@ __version__ = '0.1.0'
 
 import codecs
 import unicodecsv as csv
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 import os
 import re
 import sys
@@ -29,7 +29,7 @@ data = []
 
 for i in range(0, len(records)-1):
 	data.append({})
-	counter = {}
+	counter = defaultdict(int)
 	record = re.sub(r'\n {6}', '', records[i])
 	for field in record.splitlines():
 		datum = field.split(': ', 1)
@@ -38,10 +38,7 @@ for i in range(0, len(records)-1):
 			datum = field.split(':', 1)
 			# Take note of which iteration of this field we're at, to properly store subfields.
 			if datum[0] in rip:
-				if datum[0] in counter:
-					counter[datum[0]] += 1
-				else:
-					counter[datum[0]] = 1
+				counter[datum[0]] += 1
 			continue
 		if datum[0] not in rip:
 			if datum[0][:-1] not in rip:
@@ -55,7 +52,7 @@ for i in range(0, len(records)-1):
 			else:
 				data[i][datum[0][:-1] + str(counter[datum[0][:-1]]) + datum[0][-1] + '1'] = datum[1]
 
-# Prepare to write out to CSV
+# Prepare to write out to CSV: find out what columns we need
 fieldnames = {}
 header = []
 for i in range(0, len(data)-1):
@@ -64,8 +61,16 @@ for i in range(0, len(data)-1):
 for name in fieldnames.iterkeys():
 	header.append(name)
 print(header)
+
+# Fill the blanks and get an actual table
+for i in range(0, len(data)-1):
+	for column in header:
+		if column not in data[i]:
+			data[i][column] = u""
 table = namedtuple('table', ', '.join(header))
 table = [table._make(row) for row in data]
+
+# Actually write out to CSV
 with codecs.open('iccd.csv', 'w', encoding='utf-8') as csvfile:
 	out = csv.writer(csvfile, delimiter='\t',
 				  lineterminator='\n',
