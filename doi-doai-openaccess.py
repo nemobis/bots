@@ -1,7 +1,7 @@
 #!/usr/bin/env python2
 """
 Queries the Wikimedia projects database replica on labsdb to list all
-links to DOI documents which are Open Access on DOAI.
+links to DOI documents in green Open Access available via DOAI.io.
 Requires Wikimedia Labs labsdb local access.
 
 Usage:
@@ -59,9 +59,12 @@ def get_doi_el(wiki):
     cursor = connection.cursor()
     cursor.execute(doiquery)
     for link in cursor.fetchall():
-        doi = re.findall('10.+$', link[0])[0]
-        if doi:
-            dois.add(doi)
+        try:
+            doi = re.findall('10.+$', link[0])[0]
+            if doi:
+                dois.add(doi)
+        except IndexError:
+            continue
 
     # print "Found %d DOI external links on %s" % (len(dois), wiki)
     return dois
