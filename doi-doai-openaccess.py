@@ -18,8 +18,15 @@ import docopt
 import MySQLdb
 import re
 import requests
+from requests.packages.urllib3.util.retry import Retry
+from requests.adapters import HTTPAdapter
 
 session = requests.Session()
+# Courtesy datashaman https://stackoverflow.com/a/35504626
+retries = Retry(total=5,
+                backoff_factor=2,
+                status_forcelist=[ 500, 502, 503, 504 ])
+session.mount('http://', HTTPAdapter(max_retries=retries))
 
 def main(argv=None):
 
@@ -49,7 +56,8 @@ def get_doi_el(wiki):
         doi = re.findall('10.+$', link[0])[0]
         if doi:
             dois.add(doi)
-    
+
+    # print "Found %d DOI external links on %s" % (len(dois), wiki)
     return dois
 
 def get_doi_iwl(wiki):
@@ -76,7 +84,11 @@ def get_doai_oa(doi):
     """ Given a DOI, return DOAI target URL if open access, None otherwise. """
 
     doaiurl = 'http://doai.io/%s' % doi
-    doai = session.head(url=doaiurl)
+    try:
+        doai = session.head(url=doaiurl)
+    except ConnectionError:
+        return False
+
     if doai.status_code == 302:
         url = doai.headers['Location']
         if re.search('//dx.doi.org', url):
