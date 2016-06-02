@@ -16,17 +16,23 @@ Copyright waived (CC-0), Federico Leva, 2016
 """
 import docopt
 import MySQLdb
+import random
 import re
 import requests
-from requests.packages.urllib3.util.retry import Retry
-from requests.adapters import HTTPAdapter
+import time
 
 session = requests.Session()
-# Courtesy datashaman https://stackoverflow.com/a/35504626
-retries = Retry(total=5,
-                backoff_factor=2,
-                status_forcelist=[ 500, 502, 503, 504 ])
-session.mount('http://', HTTPAdapter(max_retries=retries))
+try:
+    from requests.packages.urllib3.util.retry import Retry
+    from requests.adapters import HTTPAdapter
+    # Courtesy datashaman https://stackoverflow.com/a/35504626
+    retries = Retry(total=5,
+                    backoff_factor=2,
+                    status_forcelist=[ 500, 502, 503, 504 ])
+    session.mount('http://', HTTPAdapter(max_retries=retries))
+except:
+    # Our urllib3/requests is too old
+    pass
 
 def main(argv=None):
 
@@ -87,6 +93,7 @@ def get_doai_oa(doi):
     try:
         doai = session.head(url=doaiurl)
     except ConnectionError:
+        time.sleep(random.randint(1, 100))
         return False
 
     if doai.status_code == 302:
