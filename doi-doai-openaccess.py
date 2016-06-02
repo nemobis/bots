@@ -92,7 +92,7 @@ def get_doai_oa(doi):
     doaiurl = 'http://doai.io/%s' % doi
     try:
         doai = session.head(url=doaiurl)
-    except ConnectionError:
+    except requests.ConnectionError:
         time.sleep(random.randint(1, 100))
         return False
 
