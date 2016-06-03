@@ -1,25 +1,28 @@
 #!/usr/bin/env python2
 """
 Queries the Wikimedia projects database replica on labsdb to list all
-links to DOI documents in green Open Access available via DOAI.io.
+links to DOI documents which are Open Access on DOAI and Dissem.in.
 Requires Wikimedia Labs labsdb local access.
 
 Usage:
     doi-doai-openaccess.py --help
-    doi-doai-openaccess.py <dbname>
+    doi-doai-openaccess.py [--depositable] <dbname>
 
 Options:
     --help           Prints this documentation
+    --depositable    Lists closed access DOIs which could be deposited.
     <dbname>         The dbname of the wiki to search DOIs in [default: enwiki].
 
 Copyright waived (CC-0), Federico Leva, 2016
 """
 import docopt
+import json
 import MySQLdb
 import random
 import re
 import requests
 import time
+import urllib
 
 session = requests.Session()
 try:
@@ -39,9 +42,23 @@ def main(argv=None):
     args = docopt.docopt(__doc__, argv=argv)
     wiki = args['<dbname>']
 
-    for doi in get_doi_el(wiki) | get_doi_iwl(wiki):
-        if get_doai_oa(doi):
-            print doi
+    if args['--depositable']:
+        for doi in get_doi_el(wiki) | get_doi_iwl(wiki):
+            # JSON requires 2.4.2 http://docs.python-requests.org/en/master/user/quickstart/#more-complicated-post-requests
+            payload = '{"doi": "%s"}' % doi
+            r = session.post('http://dissem.in/api/query', data=payload)
+            if r.status_code > 399:
+                print u"ERROR with: %s" % payload
+            try:
+                dis = json.loads(r.text)
+                if dis['status'] == "ok" and dis['paper']['classification'] == "OK":
+                    print u"Depositable DOI: %s by %s" % (doi, dis['paper']['authors'][0])
+            except:
+                continue
+    else:
+        for doi in get_doi_el(wiki) | get_doi_iwl(wiki):
+            if get_doai_oa(doi):
+                print doi
 
 def get_doi_el(wiki):
     """ Set of DOI codes from external links. """
@@ -62,7 +79,7 @@ def get_doi_el(wiki):
         try:
             doi = re.findall('10.+$', link[0])[0]
             if doi:
-                dois.add(doi)
+                dois.add(urllib.unquote(doi))
         except IndexError:
             continue
 
