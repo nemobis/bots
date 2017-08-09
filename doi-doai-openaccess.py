@@ -48,12 +48,25 @@ def main(argv=None):
             payload = '{"doi": "%s"}' % doi
             r = session.post('https://dissem.in/api/query', data=payload)
             if r.status_code > 399:
-                print "ERROR with:"
-                print payload
+                print "ERROR with: %s" % doi
+                continue
             try:
-                dis = json.loads(r.text)
+                dis = r.json()
                 if dis['status'] == "ok" and dis['paper']['classification'] == "OK":
-                    print u"Depositable DOI: %s by %s" % (doi, dis['paper']['authors'][0])
+                    if get_dissemin_pdf(doi):
+                        print u"URL available for DOI: %s" % doi
+                    else:
+                        doai = get_doai_oa(doi)
+                        if doai:
+                            if re.search('academia.edu', doai):
+                                print u"Social URL available for DOI: %s" % doi
+                                print u"Depositable DOI: %s" % doi
+                            else:
+                                print u"URL available for DOI: http://doai.io/%s" % doi
+                        else:
+                            print u"Depositable DOI: %s" % doi
+                else:
+                    print u"Non-depositable DOI: %s" %doi
             except:
                 continue
     else:
@@ -119,10 +132,25 @@ def get_doai_oa(doi):
 
     if doai.status_code == 302:
         url = doai.headers['Location']
-        if re.search('//dx.doi.org', url):
+        if re.search('doi.org', url):
             return None
         else:
             return url
-    
+
+def get_dissemin_pdf(doi):
+    """ Given a DOI, return the first URL which Dissemin belies to provide a PDF """
+
+    r = session.get('https://dissem.in/api/%s' % doi)
+    if r.status_code > 399:
+        return None
+    try:
+        for record in r.json()['paper']['records']:
+            if 'pdf_url' in record:
+                return record['pdf_url']
+    except:
+        return
+
+    return
+
 if __name__ == "__main__":
     main()
