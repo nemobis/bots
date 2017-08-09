@@ -46,9 +46,10 @@ def main(argv=None):
         for doi in get_doi_el(wiki) | get_doi_iwl(wiki):
             # JSON requires 2.4.2 http://docs.python-requests.org/en/master/user/quickstart/#more-complicated-post-requests
             payload = '{"doi": "%s"}' % doi
-            r = session.post('http://dissem.in/api/query', data=payload)
+            r = session.post('https://dissem.in/api/query', data=payload)
             if r.status_code > 399:
-                print u"ERROR with: %s" % payload
+                print "ERROR with:"
+                print payload
             try:
                 dis = json.loads(r.text)
                 if dis['status'] == "ok" and dis['paper']['classification'] == "OK":
