@@ -1,4 +1,5 @@
 #!/usr/bin/env python2
+# -*- coding: utf-8  -*-
 """
 Queries the Wikimedia projects database replica on labsdb to list all
 links to DOI documents which are Open Access on DOAI and Dissem.in.
@@ -6,18 +7,24 @@ Requires Wikimedia Labs labsdb local access.
 
 Usage:
     doi-doai-openaccess.py --help
-    doi-doai-openaccess.py [--depositable] <dbname>
+    doi-doai-openaccess.py [--depositable] [--oadoi] [--list=FILE | <dbname>]
 
 Options:
-    --help           Prints this documentation
+    --help           Prints this documentation.
     --depositable    Lists closed access DOIs which could be deposited.
+    --oadoi          Use the oaDOI API instead of DOAI.
+    --list=FILE      Reads the DOIs from a text file rather than the database.
     <dbname>         The dbname of the wiki to search DOIs in [default: enwiki].
 
-Copyright waived (CC-0), Federico Leva, 2016
+Copyright waived (CC-0), Federico Leva, 2016–2017
 """
+
 import docopt
 import json
-import MySQLdb
+try:
+    import MySQLdb
+except:
+    print "WARNING: Cannot query the DB, MySQLdb isn't available"
 import random
 import re
 import requests
@@ -25,6 +32,7 @@ import time
 import urllib
 
 session = requests.Session()
+sessiondoai = requests.Session()
 try:
     from requests.packages.urllib3.util.retry import Retry
     from requests.adapters import HTTPAdapter
@@ -32,7 +40,7 @@ try:
     retries = Retry(total=5,
                     backoff_factor=2,
                     status_forcelist=[ 500, 502, 503, 504 ])
-    session.mount('http://', HTTPAdapter(max_retries=retries))
+    session.mount('https://', HTTPAdapter(max_retries=retries))
 except:
     # Our urllib3/requests is too old
     pass
@@ -42,37 +50,51 @@ def main(argv=None):
     args = docopt.docopt(__doc__, argv=argv)
     wiki = args['<dbname>']
 
-    if args['--depositable']:
-        for doi in get_doi_el(wiki) | get_doi_iwl(wiki):
-            # JSON requires 2.4.2 http://docs.python-requests.org/en/master/user/quickstart/#more-complicated-post-requests
-            payload = '{"doi": "%s"}' % doi
-            r = session.post('https://dissem.in/api/query', data=payload)
-            if r.status_code > 399:
-                print "ERROR with: %s" % doi
-                continue
+    if args['--list']:
+        doilist = open(args['--list'], 'r').readlines()
+    else:
+        doilist = get_doi_el(wiki) + get_doi_iwl(wiki)
+
+    if args['--depositable'] and not args['--oadoi']:
+        for doi in doilist:
+            doi = doi.strip()
             try:
-                dis = r.json()
-                if dis['status'] == "ok" and dis['paper']['classification'] == "OK":
-                    if get_dissemin_pdf(doi):
-                        print u"URL available for DOI: %s" % doi
-                    else:
-                        doai = get_doai_oa(doi)
-                        if doai:
-                            if re.search('academia.edu', doai):
-                                print u"Social URL available for DOI: %s" % doi
-                                print u"Depositable DOI: %s" % doi
-                            else:
-                                print u"URL available for DOI: http://doai.io/%s" % doi
-                        else:
-                            print u"Depositable DOI: %s" % doi
+                archived = get_dissemin_pdf(doi)
+                if archived:
+                    print u"URL available for DOI: %s" % doi
                 else:
-                    print u"Non-depositable DOI: %s" %doi
+                    archived = get_doai_oa(doi)
+                    if archived:
+                        if re.search('academia.edu', archived):
+                            print u"Social URL available for DOI: %s" % doi
+                            archived = None
+                        else:
+                            print u"URL available for DOI: http://doai.io/%s" % doi
+
+                if not archived and is_depositable(doi):
+                        print u"Depositable DOI: %s" % doi
+                else:
+                        print u"Non-depositable DOI: %s" % doi
             except:
                 continue
+    elif args['--depositable'] and args['--oadoi']:
+        for doi in doilist:
+            doi = doi.strip()
+            if get_oadoi(doi):
+                print u"URL available in oaDOI for DOI: %s" % doi
+            else:
+                if is_depositable(doi):
+                    print u"Depositable DOI: %s" % doi
+                else:
+                    print u"Non-depositable DOI: %s" %doi
     else:
-        for doi in get_doi_el(wiki) | get_doi_iwl(wiki):
-            if get_doai_oa(doi):
-                print doi
+        for doi in doilist:
+            if args['--oadoi']:
+                if get_oadoi(doi):
+                    print doi
+            else:
+                if get_doai_oa(doi):
+                    print doi
 
 def get_doi_el(wiki):
     """ Set of DOI codes from external links. """
@@ -121,11 +143,11 @@ def get_doi_iwl(wiki):
     return dois
 
 def get_doai_oa(doi):
-    """ Given a DOI, return DOAI target URL if open access, None otherwise. """
+    """ Given a DOI, return DOAI target URL if green open access, None otherwise. """
 
     doaiurl = 'http://doai.io/%s' % doi
     try:
-        doai = session.head(url=doaiurl)
+        doai = sessiondoai.head(url=doaiurl)
     except requests.ConnectionError:
         time.sleep(random.randint(1, 100))
         return False
@@ -137,11 +159,26 @@ def get_doai_oa(doi):
         else:
             return url
 
+def get_oadoi(doi):
+    """ Given a DOI, return oaDOI target URL if open access, None otherwise. """
+
+    try:
+        oadoi = sessiondoai.get("https://api.oadoi.org/%s?email=openaccess@wikimedia.it" % doi)
+        oadoi = oadoi.json()['results'][0]
+    except:
+        time.sleep(random.randint(1, 100))
+        return False
+
+    if 'free_fulltext_url' in oadoi:
+        return oadoi['free_fulltext_url']
+    else:
+        return None
+
 def get_dissemin_pdf(doi):
-    """ Given a DOI, return the first URL which Dissemin belies to provide a PDF """
+    """ Given a DOI, return the first URL which Dissemin believes to provide a PDF """
 
     r = session.get('https://dissem.in/api/%s' % doi)
-    if r.status_code > 399:
+    if r.status_code >= 400:
         return None
     try:
         for record in r.json()['paper']['records']:
@@ -151,6 +188,22 @@ def get_dissemin_pdf(doi):
         return
 
     return
+
+def is_depositable(doi):
+    # JSON requires 2.4.2 http://docs.python-requests.org/en/master/user/quickstart/#more-complicated-post-requests
+    payload = '{"doi": "%s"}' % doi
+    r = session.post('https://dissem.in/api/query', data=payload)
+    if r.status_code >= 400:
+        print u"ERROR with: %s" % doi
+        return None
+    try:
+        dis = r.json()
+        if dis['status'] == "ok" and 'classification' in dis['paper'] and ( dis['paper']['classification'] == "OK" or dis['paper']['classification'] == "OA" ):
+            return True
+        else:
+            return False
+    except:
+        return None
 
 if __name__ == "__main__":
     main()
