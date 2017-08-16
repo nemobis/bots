@@ -21,10 +21,11 @@ Copyright waived (CC-0), Federico Leva, 2016–2017
 
 import docopt
 import json
+from codecs import open
 try:
     import MySQLdb
 except:
-    print "WARNING: Cannot query the DB, MySQLdb isn't available"
+    print( "WARNING: Cannot query the DB, MySQLdb isn't available" )
 import random
 import re
 import requests
@@ -51,7 +52,7 @@ def main(argv=None):
     wiki = args['<dbname>']
 
     if args['--list']:
-        doilist = open(args['--list'], 'r').readlines()
+        doilist = open(args['--list'], 'r', encoding='utf-8').readlines()
     else:
         doilist = get_doi_el(wiki) + get_doi_iwl(wiki)
 
@@ -61,40 +62,43 @@ def main(argv=None):
             try:
                 archived = get_dissemin_pdf(doi)
                 if archived:
-                    print u"URL available for DOI: %s" % doi
+                    print( u"URL available for DOI: %s" % doi)
                 else:
                     archived = get_doai_oa(doi)
                     if archived:
                         if re.search('academia.edu', archived):
-                            print u"Social URL available for DOI: %s" % doi
+                            print( u"Social URL available for DOI: %s" % doi )
                             archived = None
                         else:
-                            print u"URL available for DOI: http://doai.io/%s" % doi
+                            print( u"URL available for DOI: http://doai.io/%s" % doi )
 
                 if not archived and is_depositable(doi):
-                        print u"Depositable DOI: %s" % doi
+                        print( u"Depositable DOI: %s" % doi )
                 else:
-                        print u"Non-depositable DOI: %s" % doi
+                        print( u"Non-depositable DOI: %s" % doi )
             except:
                 continue
     elif args['--depositable'] and args['--oadoi']:
         for doi in doilist:
-            doi = doi.strip()
-            if get_oadoi(doi):
-                print u"URL available in oaDOI for DOI: %s" % doi
-            else:
-                if is_depositable(doi):
-                    print u"Depositable DOI: %s" % doi
+            try:
+                doi = doi.strip()
+                if get_oadoi(doi):
+                    print( u"URL available in oaDOI for DOI: %s" % doi )
                 else:
-                    print u"Non-depositable DOI: %s" %doi
+                    if is_depositable(doi):
+                        print( u"Depositable DOI: %s" % doi )
+                    else:
+                        print( u"Non-depositable DOI: %s" % doi )
+            except:
+                continue
     else:
         for doi in doilist:
             if args['--oadoi']:
                 if get_oadoi(doi):
-                    print doi
+                    print( doi )
             else:
                 if get_doai_oa(doi):
-                    print doi
+                    print( doi )
 
 def get_doi_el(wiki):
     """ Set of DOI codes from external links. """
@@ -139,7 +143,7 @@ def get_doi_iwl(wiki):
     cursor.execute(doiquery)
     for link in cursor.fetchall():
         dois.add(link[0])
-    
+
     return dois
 
 def get_doai_oa(doi):
@@ -177,10 +181,10 @@ def get_oadoi(doi):
 def get_dissemin_pdf(doi):
     """ Given a DOI, return the first URL which Dissemin believes to provide a PDF """
 
-    r = session.get('https://dissem.in/api/%s' % doi)
-    if r.status_code >= 400:
-        return None
     try:
+        r = session.get('https://dissem.in/api/%s' % doi)
+        if r.status_code >= 400:
+            return None
         for record in r.json()['paper']['records']:
             if 'pdf_url' in record:
                 return record['pdf_url']
@@ -192,11 +196,11 @@ def get_dissemin_pdf(doi):
 def is_depositable(doi):
     # JSON requires 2.4.2 http://docs.python-requests.org/en/master/user/quickstart/#more-complicated-post-requests
     payload = '{"doi": "%s"}' % doi
-    r = session.post('https://dissem.in/api/query', data=payload)
-    if r.status_code >= 400:
-        print u"ERROR with: %s" % doi
-        return None
     try:
+        r = session.post('https://dissem.in/api/query', data=payload)
+        if r.status_code >= 400:
+            print( u"ERROR with: %s" % doi )
+            return None
         dis = r.json()
         if dis['status'] == "ok" and 'classification' in dis['paper'] and ( dis['paper']['classification'] == "OK" or dis['paper']['classification'] == "OA" ):
             return True
