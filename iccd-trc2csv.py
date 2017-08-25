@@ -70,17 +70,19 @@ for i in range(0, len(data)-1):
 | institution = {{institution:Museoscienza}}
 | permission =  {{cc-by-sa-4.0}}
 """
+	filenames = []
+	directory = './Foto_CATALOGO_01/%s_foto/' % data[i]['IDK'].split('-')[0].strip()
 	for key in data[i].iterkeys():
 		if key == "IDK":
 			description += "| source = {{Museoscienza|idk=%s}}\n" % data[i]['IDK']
 		else:
 			description += u"| %s = %s\n" % (key, data[i][key])
+		if re.match('FTA[0-9]+I', key):
+			filenames.append(directory + data[i][key])
 	description += u"}}"
 
-	filenames = []
 	# The filenames may have excess leading zeros, but we do not want partial matches.
 	needle = r'(^|[^0-9])0*%s[^0-9]' % re.sub('[^0-9]', '', data[i]['INV1N'])
-	directory = './Foto_CATALOGO_01/%s_foto/' % data[i]['IDK'].split('-')[0].strip()
 	for image in os.listdir(directory):
 		if re.match(needle, image):
 			filenames.append(directory + image)
