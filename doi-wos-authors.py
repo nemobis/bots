@@ -28,12 +28,13 @@ for xml in [ each for each in os.listdir('.') if each.endswith('.xml') ]:
 			continue
 
 		# Addresses can be in one or both of the following
-		addresses = record.xpath('//fullrecord_metadata/*[name()="addresses" or name()="reprint_addresses"]')[0]
+		addresses = (record.xpath('//fullrecord_metadata/*[name()="reprint_addresses"]') + record.xpath('//fullrecord_metadata/*[name()="addresses"]'))[0]
 		addresses_count = int(addresses.xpath('./@count')[0])
 		
 		# Fetch the names and email addresses from the summary,
 		# then look elsewhere for details.
 		names = record.xpath('//summary/names//name')
+		org = None
 		for name in names:
 			if addresses_count == 1:
 				# All names are from the same address/organization
@@ -46,6 +47,7 @@ for xml in [ each for each in os.listdir('.') if each.endswith('.xml') ]:
 				# Each name can have one or both of these IDs
 				try:
 					author_id = int( name.xpath('./@dais_id')[0] )
+					author_id_ng = 0
 				except IndexError:
 					author_id = 0
 					try:
@@ -55,14 +57,17 @@ for xml in [ each for each in os.listdir('.') if each.endswith('.xml') ]:
 
 				try:
 					# Look for the same author by its ID in the address list
-					address_number = int(addresses.xpath('//name[(@dais_id = %d or @daisng_id = %d) and @addr_no > 0]/@addr_no' % (author_id, author_id_ng) )[0])
-					org = addresses.xpath('//address_spec[@addr_no = %d]/organizations' % address_number )[0]
+					# address_number = int(addresses.xpath('//name[(@dais_id = %d or @daisng_id = %d) and @addr_no > 0]/@addr_no' % (author_id, author_id_ng) )[0])
+					org = addresses.xpath('//address_spec[@addr_no = 1]/organizations')[0]
 				except IndexError:
 					print "Could not find org for author %d/%d in %s" % (author_id, author_id_ng, xml)
 					org = None
 			if org is not None:
-				# Try to fetch the preferred/controlled name for the org/address
-				org_name = (org.xpath('organization[@pref="Y"]/text()') + org.xpath('organization[1]/text()'))[0]
+				try:
+					# Try to fetch the preferred/controlled name for the org/address
+					org_name = (org.xpath('organization[@pref="Y"]/text()') + org.xpath('organization[1]/text()'))[0]
+				except IndexError:
+					org_name = ''
 			else:
 				org_name = ''
 
