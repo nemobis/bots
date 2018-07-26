@@ -52,6 +52,9 @@ for code in wishlist.readlines():
 	except requests.exceptions.ConnectionError:
 		print("WARNING: Connection error. Sleeping.")
 		sleep(5)
+	except requests.exceptions.ReadTimeout:
+		print("WARNING: Connection timeout. Sleeping.")
+		sleep(15)
 
 wishlist.close()
 offerings.close()
