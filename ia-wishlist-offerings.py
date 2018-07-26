@@ -37,7 +37,7 @@ for code in wishlist.readlines():
 	#	price = listing.xpath('//span[@class="currentprice" and @id="C_C_ProductDetail_lSellPriceU"]/text()')[0]
 	#	writer.writerow([code, u'Libraccio', price, u''])
 
-		listing = html.fromstring( t.get('https://www.abebooks.it/servlet/SearchResults?isbn=%s&sortby=2' % code , timeout=10).text )
+		listing = html.fromstring( t.get('http://www.abebooks.it/servlet/SearchResults?isbn=%s&sortby=2' % code , timeout=10).text )
 		price = listing.xpath('//span[@class="price"]/text()')[0]
 		seller = listing.xpath('//a[text()="Informazioni sul venditore"]/@href')[0]
 		title = listing.xpath('//div[@id="book-1"]//h2/a[@itemprop="url"]/@title')[0]
