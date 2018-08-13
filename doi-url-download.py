@@ -33,6 +33,7 @@ def getDriver():
 def downloadUrl(driver, url=None):
     actions = webdriver.ActionChains(driver)
     driver.get(url)
+    sleep(1)
     try:
         elem = driver.find_element_by_css_selector(".stats-document-lh-action-downloadPdf_2")
     except selenium.common.exceptions.NoSuchElementException:
@@ -40,6 +41,7 @@ def downloadUrl(driver, url=None):
         return
     actions.click(elem)
     actions.perform()
+    sleep(random.randint(10, 40))
 
 def main(argv=None):
     #with Xvfb() as xvfb:
@@ -47,4 +49,6 @@ def main(argv=None):
         driver = getDriver()
         for url in urls.readlines():
             downloadUrl(driver, url.strip())
-            time.sleep(random.randint(10, 100))
+
+if __name__ == "__main__":
+    main()
