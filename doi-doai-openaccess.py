@@ -8,12 +8,13 @@ Requires Wikimedia Labs labsdb local access.
 Usage:
     doi-doai-openaccess.py --help
     doi-doai-openaccess.py [--depositable] [--oadoi] [--dbcnf=DBCNF]
-                           [--list=FILE | <dbname>]
+    [--list=FILE | <dbname>] [--download]
 
 Options:
     --help           Prints this documentation.
     --depositable    Lists closed access DOIs which could be deposited.
-    --oadoi          Use the oaDOI API instead of DOAI.
+    --download       Download the PDF from the OA URL retrieved from oaDOI.
+    --oadoi          Use the Unpaywall (oaDOI) API instead of DOAI.
     --list=FILE      Reads the DOIs from a text file rather than the database.
     --dbcnf=DBCNF    The configuration file with credentials
                      [default: ~/.my.cnf]
@@ -36,12 +37,14 @@ from codecs import open
 
 import docopt
 import requests
+import requests.exceptions
+import urllib3.exceptions
 import pymysql as dbclient
 
 if sys.version_info >= (3,):
-    from urllib.parse import unquote
+    from urllib.parse import unquote, quote_plus
 else:
-    from urllib import unquote
+    from urllib import unquote, quote_plus
 
 SESSION = requests.Session()
 SESSIONDOAI = requests.Session()
@@ -152,8 +155,10 @@ def main(argv=None):
         for doi in doilist:
             doi = doi.strip()
             if args['--oadoi']:
-                if get_oadoi(doi):
+                pdf = get_oadoi(doi)
+                if pdf:
                     print(doi)
+                    get_doi_download(doi, pdf)
             else:
                 if get_doai_oa(doi):
                     print(doi)
@@ -260,6 +265,21 @@ def get_dissemin_pdf(doi):
 
     return
 
+def get_doi_download(doi, url):
+    """ Given an URL, download the PDF and save in current directory. """
+    try:
+        with open("{}.pdf".format(quote_plus(doi)), 'wb') as out:
+            req = SESSION.get(url, timeout=10)
+            if req.status_code == 200:
+                out.write(req.content)
+            else:
+                return False
+    except requests.exceptions.ConnectionError:
+        return None
+    except urllib3.exceptions.MaxRetryError:
+        return False
+    except requests.exceptions.RetryError:
+        return False
 
 def is_depositable(doi):
     # JSON requires 2.4.2
