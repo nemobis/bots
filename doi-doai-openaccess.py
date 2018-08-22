@@ -270,7 +270,7 @@ def get_doi_download(doi, url):
     try:
         with open("{}.pdf".format(quote_plus(doi)), 'wb') as out:
             req = SESSION.get(url, timeout=10)
-            if req.status_code == 200:
+            if req.status_code == 200 and req.headers['Content-Type'] == 'application/pdf':
                 out.write(req.content)
             else:
                 return False
