@@ -22,7 +22,7 @@ prng = Random.new
 
 search_result = a.get('https://scholar.google.it' )
 search_form = search_result.forms.first
-search_form.as_q = "%s" % ARGV[0]
+search_form.as_q = '"%s"' % ARGV[0]
 search_form.as_ylo = ARGV[1]
 search_form.as_yhi = ARGV[1]
 
@@ -51,7 +51,7 @@ loop do
     end
   end
 
-  sleep(prng.rand(10..60.0))
+  sleep(prng.rand(10..180.0))
   begin
   # We click the "Next" link; replace with your language
   search_result = search_result.link_with(:text => 'Avanti').click
