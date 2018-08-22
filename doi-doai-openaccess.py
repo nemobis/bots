@@ -280,6 +280,9 @@ def get_doi_download(doi, url):
         return False
     except requests.exceptions.RetryError:
         return False
+    except UnicodeError:
+        # UnicodeDecodeError: 'utf-8' codec can't decode byte ...: invalid continuation byte
+        return None
 
 def is_depositable(doi):
     # JSON requires 2.4.2
