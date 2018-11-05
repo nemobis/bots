@@ -15,6 +15,15 @@ except:
 import re
 import requests
 s = requests.Session()
+import threading
+from time import sleep
+convertlang = {'ar': 'Arabic', 'ch': 'Chinese', 'de': 'German', 'en': 'English', 'es': 'Spanish', 'fr': 'French', 'it': 'Italian', 'ja': 'Japanese', 'nl': 'Dutch', 'pl': 'Polish', 'pt': 'Portuguese', 'ru': 'Russian'}
+
+def worker(doi=None):
+    try:
+        upload_doi(doi)
+    except:
+        pass
 
 def upload_doi(doi=None):
 	m = s.get('https://api.crossref.org/works/{}?mailto=openaccess@wikimedia.it'.format(doi)).json()['message']
@@ -36,7 +45,7 @@ def upload_doi(doi=None):
 		"issn": "; ".join(m.get('ISSN', [])),
 		"journalabbrv": m.get('short-container-title'),
 		"journaltitle": ' '.join(m.get('container-title', [])),
-		"language": m.get('language'),
+		"language": convertlang.get(m.get('language'), m.get('language'))
 		"pagerange": m.get('page'),
 		"publisher": m.get('publisher'),
 		"publisher_location": m.get('publisher-location'),
@@ -52,4 +61,5 @@ if __name__ == '__main__':
 	for doi in dois.readlines():
 		doi = doi.strip()
 		print("Looking up DOI: {}".format(doi))
-		upload_doi(doi)
+		threading.Thread(target=worker, args=[doi]).start()
+		sleep(8)
