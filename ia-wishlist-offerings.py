@@ -55,6 +55,9 @@ for code in wishlist.readlines():
 	except requests.exceptions.ReadTimeout:
 		print("WARNING: Connection timeout. Sleeping.")
 		sleep(15)
+	except:
+		print("ERROR: Unexpected exception")
+		pass
 
 wishlist.close()
 offerings.close()
