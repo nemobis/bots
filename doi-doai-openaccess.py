@@ -53,6 +53,7 @@ try:
                         backoff_factor=2,
                         status_forcelist=[500, 502, 503, 504])
     SESSION.mount('https://', HTTPAdapter(max_retries=__retries__))
+    SESSION.mount('http://', HTTPAdapter(max_retries=__retries__))
 except:
     # Our urllib3/requests is too old
     pass
@@ -149,6 +150,7 @@ def main(argv=None):
                 continue
     else:
         for doi in doilist:
+            doi = doi.strip()
             if args['--oadoi']:
                 if get_oadoi(doi):
                     print(doi)
@@ -227,15 +229,18 @@ def get_oadoi(doi):
     """
 
     try:
-        oadoi = SESSIONDOAI.get("https://api.oadoi.org/{}"
+        oadoi = SESSIONDOAI.get("http://api.unpaywall.org/v2/{}"
                                 "?email=openaccess@wikimedia.it"
                                 .format(doi))
-        oadoi = oadoi.json()['results'][0]
+        oadoi = oadoi.json()['best_oa_location']
     except:
         time.sleep(random.randint(1, 100))
         return False
 
-    return oadoi.get('free_fulltext_url', None)
+    if oadoi:
+        return oadoi['url_for_pdf']
+    else:
+        return None
 
 
 def get_dissemin_pdf(doi):
