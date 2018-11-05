@@ -29,7 +29,7 @@ def upload_doi(doi=None):
 		"originalurl": "https://doi.org/{}".format(doi),
 		"source": "https://api.crossref.org/works/{}".format(doi),
 		"article-type": m.get('type'),
-		"creator": "; ".join([' '.join([a.get('given'), a.get('family')]) for a in m.get('author', [])]),
+		"creator": "; ".join([' '.join([a.get('given', ''), a.get('family', '')]) for a in m.get('author', [])]),
 		"date": "-".join([str(d).zfill(2) for d in m.get('published-print', []).get('date-parts', [])[0]]),
 		"description": m.get('abstract', '') + '<hr>\nThis paper is in the public domain in USA. Metadata comes from the CrossRef API, see full record in the source URL below.'.format(doi, doi),
 		"isbn": "; ".join(m.get('ISBN', [])),
