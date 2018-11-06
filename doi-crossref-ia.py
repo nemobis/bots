@@ -45,7 +45,7 @@ def upload_doi(doi=None):
 		"issn": "; ".join(m.get('ISSN', [])),
 		"journalabbrv": m.get('short-container-title'),
 		"journaltitle": ' '.join(m.get('container-title', [])),
-		"language": convertlang.get(m.get('language'), m.get('language'))
+		"language": convertlang.get(m.get('language'), m.get('language')),
 		"pagerange": m.get('page'),
 		"publisher": m.get('publisher'),
 		"publisher_location": m.get('publisher-location'),
