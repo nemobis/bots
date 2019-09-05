@@ -81,17 +81,15 @@ class Release:
 			return languages[0]
 
 	def getyear(self, title, description):
-		# FIXME bugs
-		# Date too recent for 531701: 8211
-		# Date too recent for 531678: 2019
-		# Date too recent for 530217: 2019
 		try:
 			year = re.search(r'\b(19|20)[0-9]{2}\b', title)
 			if year:
 				year = year.group(0)
 			if not year:
-				year = re.findall("(?:Anno|Data|Editore|Edizione|Released?).*([0-9]{4})", description, flags=re.S)[0]
-			return year
+				year = re.findall("(?:Anno|Data|Editore|Edizione|Released?|Uscita|Collana).{0,20}([0-9]{4})", description, flags=re.S)
+				print(year)
+			if year:
+				return year[0]
 		except Exception as e:
 			print(e)
 			return
