@@ -98,12 +98,13 @@ class Release:
 			return
 
 	def getdescription(self, postid):
+		forumurl = "http://forum.tntvillage.scambioetico.org/index.php?showtopic={}".format(self.tntid)
 		try:
-			tnt = session.get("https://web.archive.org/web/20190831000000/http://forum.tntvillage.scambioetico.org/index.php?showtopic={}".format(self.tntid))
+			tnt = session.get("https://web.archive.org/web/20190831000000/{}".format(forumurl))
 		except:
 			tnt = None
 		if tnt is None or tnt.status_code > 400:
-			tnt = session.get("https://www.google.com/search?q=cache:{}".format(self.tntid))
+			tnt = session.get("https://www.google.com/search?q=cache:{}".format(forumurl))
 		if tnt.status_code > 400:
 			print("WARNING: page not found for {}".format(self.tntid))
 		topic = html.fromstring(tnt.text)
@@ -281,11 +282,11 @@ def main(argv=None):
 			upload = item.upload()
 			if upload:
 				print("Upload successful for release {}".format(release.TOPIC))
+			sleep(5)
 		except Exception as e:
 			print("ERROR: unexpected error uploading")
 			print(e)
 			sleep(180)
-		sleep(5)
 
 if __name__ == '__main__':
 	main()
