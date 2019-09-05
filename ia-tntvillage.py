@@ -85,11 +85,12 @@ class Release:
 			year = re.search(r'\b(19|20)[0-9]{2}\b', title)
 			if year:
 				year = year.group(0)
+				return year
 			if not year:
-				year = re.findall("(?:Anno|Data|Editore|Edizione|Released?|Uscita|Collana).{0,50}([0-9]{4})", description, flags=re.S)
-				print(year)
-			if year:
-				return year[0]
+				years = re.findall("(?:Anno|Data|Editore|Edizione|Released?|Uscita|Collana).{0,50}([0-9]{4})", description, flags=re.S)
+				print(years)
+			if years:
+				return years[0]
 		except Exception as e:
 			print(e)
 			return
