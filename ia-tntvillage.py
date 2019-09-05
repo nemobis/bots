@@ -89,7 +89,7 @@ class Release:
 				year = year.group(0)
 				return year
 			if not year:
-				years = re.findall(r'\b(?:Anno|Data|Editore|Edizione|Released?|Uscita|Collana|Titolo)\b[^{&]{0,30}\b([0-9]{4}\b)', description, flags=re.S)
+				years = re.findall(r'\b(?:Anno|Data|Editore|Edizione|Released?|Uscita|Prima uscita|Collana|Titolo|Pubblicazione)\b[^{&]{0,30}\b([0-9]{4}\b)', description, flags=re.S)
 				print(years)
 			if years:
 				return years[0]
@@ -99,10 +99,14 @@ class Release:
 
 	def getdescription(self, postid):
 		tnt = session.get("https://web.archive.org/web/20190831000000/http://forum.tntvillage.scambioetico.org/index.php?showtopic={}".format(self.tntid))
+		if tnt.status_code > 400:
+			tnt = session.get("https://www.google.com/search?q=cache:{}".format(self.tntid))
+		if tnt.status_code > 400:
+			print("WARNING: page not found for {}".format(self.tntid))
 		topic = html.fromstring(tnt.text)
 		# Pick whichever post content comes first
 		try:
-			description = etree.tostring(topic.xpath('//table//td[contains(@class,"post2")]')[1]).decode("utf-8", "replace")
+			description = etree.tostring(topic.xpath('//td[contains(@width,"100%") and contains(@class,"post2")]')[0]).decode("utf-8", "replace")
 		except:
 			description = topic
 		return description
