@@ -86,7 +86,7 @@ class Release:
 			if year:
 				year = year.group(0)
 			if not year:
-				year = re.findall("(?:Anno|Data|Editore|Edizione|Released?|Uscita|Collana).{0,20}([0-9]{4})", description, flags=re.S)
+				year = re.findall("(?:Anno|Data|Editore|Edizione|Released?|Uscita|Collana).{0,50}([0-9]{4})", description, flags=re.S)
 				print(year)
 			if year:
 				return year[0]
@@ -225,7 +225,7 @@ class Release:
 		torrentname = "/tmp/{}.torrent".format(identifier)
 		torrentdesc = "/tmp/{}.html".format(identifier)
 		with open(torrentname, 'w') as torrentfile:
-			torrentfile.write('magnet:?xt=urn:btih:{}&tr=udp%3A%2F%2Ftracker.coppersurfer.tk%3A6969%2Fannounce'.format(self.infohash))
+			torrentfile.write('magnet:?xt=urn:btih:{}&tr=udp%3A%2F%2Ftracker.coppersurfer.tk%3A6969%2Fannounce&tr=http%3A%2F%2Ftracker.tntvillage.scambioetico.org%3A2710%2Fannounce&tr=udp%3A%2F%2Ftracker.pirateparty.gr%3A6969%2Fannounce&tr=udp%3A%2F%2Ftracker.internetwarriors.net%3A1337%2Fannounce&tr=udp%3A%2F%2Ftracker.leechers-paradise.org%3A6969%2Fannounce'.format(self.infohash))
 		with open(torrentdesc, 'w') as torrentdescfile:
 			torrentdescfile.write(self.description)
 		r = upload(identifier, files=[torrentname, torrentdesc], metadata=md)
