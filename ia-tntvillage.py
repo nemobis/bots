@@ -89,7 +89,7 @@ class Release:
 				year = year.group(0)
 				return year
 			if not year:
-				years = re.findall(r'\b(?:Anno|Data|Editore|Edizione|Released?|Uscita|Prima uscita|Collana|Titolo|Pubblicazione)\b[^{&]{0,30}\b([0-9]{4}\b)', description, flags=re.S)
+				years = re.findall(r'\b(?:Anno|Data|Editore|Edizione|Released?|Uscita|Prima uscita|Collana|Titolo|Pubblicazione)\b[^{]{0,30}\b(?<!#)([0-9]{4}\b)', description, flags=re.S)
 				print(years)
 			if years:
 				return years[0]
