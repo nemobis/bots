@@ -81,14 +81,15 @@ class Release:
 			return languages[0]
 
 	def getyear(self, title, description):
-		# FIXME 528825
+		# FIXME things not to much
+		# Editore: Mondadori - Urania n. 1469
 		try:
 			year = re.search(r'\b(19|20)[0-9]{2}\b', title)
 			if year:
 				year = year.group(0)
 				return year
 			if not year:
-				years = re.findall(r'\b(?:Anno|Data|Editore|Edizione|Released?|Uscita|Collana)\b[^{&]{0,30}\b([0-9]{4}\b)', description, flags=re.S)
+				years = re.findall(r'\b(?:Anno|Data|Editore|Edizione|Released?|Uscita|Collana|Titolo)\b[^{&]{0,30}\b([0-9]{4}\b)', description, flags=re.S)
 				print(years)
 			if years:
 				return years[0]
