@@ -77,7 +77,7 @@ class Release:
 	def getlanguage(self, description):
 		# TODO: Add languages? Italian is 84 % and the next 3 bring it to 87 %.
 		languages = re.findall(r"\b(ita|eng|fra|jap)\b", description, flags=re.I)
-		if languages is not None:
+		if languages:
 			return languages[0]
 
 	def getyear(self, title, description):
@@ -285,7 +285,7 @@ def main(argv=None):
 			print("ERROR: unexpected error uploading")
 			print(e)
 			sleep(180)
-		sleep(10)
+		sleep(5)
 
 if __name__ == '__main__':
 	main()
