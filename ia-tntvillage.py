@@ -98,8 +98,11 @@ class Release:
 			return
 
 	def getdescription(self, postid):
-		tnt = session.get("https://web.archive.org/web/20190831000000/http://forum.tntvillage.scambioetico.org/index.php?showtopic={}".format(self.tntid))
-		if tnt.status_code > 400:
+		try:
+			tnt = session.get("https://web.archive.org/web/20190831000000/http://forum.tntvillage.scambioetico.org/index.php?showtopic={}".format(self.tntid))
+		except:
+			tnt = None
+		if tnt is None or tnt.status_code > 400:
 			tnt = session.get("https://www.google.com/search?q=cache:{}".format(self.tntid))
 		if tnt.status_code > 400:
 			print("WARNING: page not found for {}".format(self.tntid))
