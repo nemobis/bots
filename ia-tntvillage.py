@@ -5,11 +5,12 @@ Script to process the TNTvillage dump and mirror the items
 on the Internet Archive (archive.org).
 
 Usage:
-    ia-tntvillage.py --help
-    ia-tntvillage.py <tnt_dump>
+    ia-tntvillage.py [--help] [--interrupt <user>] [<tnt_dump>]
 
 Options:
     --help             Prints this documentation.
+    --interrupt <user> Interrupt older, stale derivation tasks for
+                       the user (specified by their email address).
     <tnt_dump>         The CSV dump to read from.
     
 The expected dump format is:
@@ -36,12 +37,14 @@ https://archive.org/metamgr.php?f=histogram&group=contributor&w_identifier=tntvi
 #
 # Distributed under the terms of the MIT license.
 #
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 
 import csv
 from collections import namedtuple
 import docopt
 from internetarchive import get_item, upload
+# Requires version 1.9.0.dev2 or higher
+from internetarchive import get_session, Catalog
 from kitchen.text.converters import to_unicode
 from lxml import html, etree
 import os
@@ -259,8 +262,29 @@ def isiaduplicate(topic):
 		print("Skipping, {} already exists".format(iaid))
 		return True
 
+def interrupt(user):
+	session = get_session()
+	catalog = Catalog(session)
+	tasks = session.iter_catalog(params={"submitter": user, "cmds": "derive.php"})
+	deriving = [t for t in tasks if t['color'] == "blue" ]
+	print("Go interrupt:")
+	for task in deriving:
+		log = task.task_log().split('\n')[-2]
+		days = re.findall("(\d+)(?:d\d+h\d+m\d+s idle)", log)
+		hours = re.findall("(\d+)(?:h\d+m\d+s idle)", log)
+		longhours = [i for i in hours if int(i) > 4]
+		if days or (hours and len(longhours) > 0):
+			print("https://catalogd.archive.org/history/{} :".format(task['identifier']))
+			print(re.findall("Percent Done.+", log)[0])
+			# Not implemented yet:
+			# https://archive.org/services/docs/api/tasks.html#supported-tasks
+			# catalog.submit_task(identifier=task['identifier'], cmd="interrupt", comment="Stale")
+
 def main(argv=None):
 	args = docopt.docopt(__doc__, argv=argv)
+
+	if args['--interrupt']:
+		return interrupt(args['--interrupt'])
 
 	with open(args['<tnt_dump>'], 'r', encoding='utf-8') as dump:
 		source = csv.reader(dump, delimiter=',')
