@@ -11,6 +11,7 @@ Options:
     --help             Prints this documentation.
     --interrupt <user> Interrupt older, stale derivation tasks for
                        the user (specified by their email address).
+                       May require admin privileges.
     <tnt_dump>         The CSV dump to read from.
     
 The expected dump format is:
@@ -37,7 +38,7 @@ https://archive.org/metamgr.php?f=histogram&group=contributor&w_identifier=tntvi
 #
 # Distributed under the terms of the MIT license.
 #
-__version__ = '0.2.0'
+__version__ = '0.2.1'
 
 import csv
 from collections import namedtuple
@@ -45,20 +46,17 @@ import docopt
 from internetarchive import get_item, upload
 # Requires version 1.9.0.dev2 or higher
 from internetarchive import get_session, Catalog
-from kitchen.text.converters import to_unicode
 from lxml import html, etree
+# Clone https://github.com/danfolkes/Magnet2Torrent
+# and install reqs (rb_libtorrent-python3 on Fedora)
+#from Magnet_To_Torrent2 import magnet2torrent
 import os
 import re
 import requests
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
-try:
-	from StringIO import StringIO
-except ImportError:
-	from io import StringIO
 from time import sleep
 import sys
-import threading
 
 session = requests.Session()
 retries = Retry(total=5, backoff_factor=1, status_forcelist=[ 502, 503, 504 ])
@@ -123,9 +121,9 @@ class Release:
 			return "opensource_movies", "movies"
 		if category in [6, 9, 10, 11, 26, 28]:
 			return "open_source_software", "software"
-		if category in [2, 21, 35]:
+		if category in [2, 21, 34, 35]:
 			return "opensource_audio", "audio"
-		if category in [3, 30, 34, 36]:
+		if category in [3, 30, 36]:
 			return "opensource", "texts"
 		if category in [27]:
 			return "opensource_image", "image"
@@ -182,7 +180,7 @@ class Release:
 			29: "TV series",
 			30: "comics",
 			32: "videogames",
-			34: "ebooks",
+			34: "audiobooks",
 			36: "magazines",
 		}
 		iasubjects = [ "TNTvillage",
@@ -237,8 +235,10 @@ class Release:
 		identifier = 'tntvillage_{}'.format(self.tntid)
 		torrentname = "/tmp/{}.torrent".format(identifier)
 		torrentdesc = "/tmp/{}.html".format(identifier)
+		magnet = "magnet:?xt=urn:btih:{}&tr=udp%3A%2F%2Ftracker.coppersurfer.tk%3A6969%2Fannounce&tr=http%3A%2F%2Ftracker.tntvillage.scambioetico.org%3A2710%2Fannounce&tr=udp%3A%2F%2Ftracker.pirateparty.gr%3A6969%2Fannounce&tr=udp%3A%2F%2Ftracker.internetwarriors.net%3A1337%2Fannounce&tr=udp%3A%2F%2Ftracker.leechers-paradise.org%3A6969%2Fannounce".format(self.infohash)
+		#magnet2torrent(magnet, torrentname)
 		with open(torrentname, 'w') as torrentfile:
-			torrentfile.write('magnet:?xt=urn:btih:{}&tr=udp%3A%2F%2Ftracker.coppersurfer.tk%3A6969%2Fannounce&tr=http%3A%2F%2Ftracker.tntvillage.scambioetico.org%3A2710%2Fannounce&tr=udp%3A%2F%2Ftracker.pirateparty.gr%3A6969%2Fannounce&tr=udp%3A%2F%2Ftracker.internetwarriors.net%3A1337%2Fannounce&tr=udp%3A%2F%2Ftracker.leechers-paradise.org%3A6969%2Fannounce'.format(self.infohash))
+			torrentfile.write(magnet)
 		with open(torrentdesc, 'w') as torrentdescfile:
 			torrentdescfile.write(self.description)
 		r = upload(identifier, files=[torrentname, torrentdesc], metadata=md)
@@ -246,13 +246,6 @@ class Release:
 		os.remove(torrentdesc)
 		if r[0].status_code < 400:
 			return True
-
-def worker(release=None):
-	try:
-		item = Release(release)
-		item.upload()
-	except:
-		sleep(180)
 
 def isiaduplicate(topic):
 	iaid = "tntvillage_{}".format(topic)
@@ -269,16 +262,54 @@ def interrupt(user):
 	deriving = [t for t in tasks if t['color'] == "blue" ]
 	print("Go interrupt:")
 	for task in deriving:
-		log = task.task_log().split('\n')[-2]
-		days = re.findall("(\d+)(?:d\d+h\d+m\d+s idle)", log)
-		hours = re.findall("(\d+)(?:h\d+m\d+s idle)", log)
-		longhours = [i for i in hours if int(i) > 4]
-		if days or (hours and len(longhours) > 0):
+		try:
+			log = task.task_log().split('\n')[-2]
+		except UnicodeDecodeError as e:
+			print(task['identifier'])
+			print(e)
+			continue
+		except requests.exceptions.ConnectionError as e:
+			print(e)
+			sleep(10)
+			continue
+
+		done = re.findall("(?:Percent Done: )([0-9]+)", log)
+		days = re.findall("(\d+)d(?:\d+h)?(?:\d+m)?(?:\d+s)? idle", log)
+		hours = re.findall("(\d+)h(?:\d+m)?(?:\d+s)? idle", log)
+		minutes = re.findall("(\d+m)(?:\d+s)? idle", log)
+		longhours = [i for i in hours if int(i) > 12]
+		shorthours = [i for i in hours if int(i) >= 1]
+		if days or (hours and (len(longhours) > 0 or (len(shorthours) > 0 and (not done or int(done[0]) < 50)) or (minutes and (not done or int(done[0]) < 1)) )):
 			print("https://catalogd.archive.org/history/{} :".format(task['identifier']))
 			print(re.findall("Percent Done.+", log)[0])
-			# Not implemented yet:
+			cookies = cookies = {} # Your archive.org cookies
+			data = { 'submit_interrupt.x': '8', 'submit_interrupt.y': '9', 'task_id[]': task['task_id'] }
+			try:
+				requests.post('https://catalogd.archive.org/catalog.php?history=1&id={}'.format(task['identifier']),
+						cookies=cookies, timeout = (1, 0.3), data=data)
+			except:
+				# Timeout, nothing to worry
+				pass
+			# TODO Not implemented yet:
 			# https://archive.org/services/docs/api/tasks.html#supported-tasks
 			# catalog.submit_task(identifier=task['identifier'], cmd="interrupt", comment="Stale")
+
+def uploader(release=None):
+	if isiaduplicate(release.TOPIC):
+		return False
+	try:
+		item = Release(release)
+		if not item.iseligible():
+			print("Skipping {}".format(release.HASH))
+			return False
+		upload = item.upload()
+		if upload:
+			print("Upload successful for release {}".format(release.TOPIC))
+			return True
+	except Exception as e:
+		print("ERROR: unexpected error uploading")
+		print(e)
+		sleep(180)
 
 def main(argv=None):
 	args = docopt.docopt(__doc__, argv=argv)
@@ -294,22 +325,8 @@ def main(argv=None):
 
 	for release in releases:
 		print(release)
-		if isiaduplicate(release.TOPIC):
-			continue
-		#threading.Thread(target=worker, args=[release]).start()
-		try:
-			item = Release(release)
-			if not item.iseligible():
-				print("Skipping {}".format(release.HASH))
-				continue
-			upload = item.upload()
-			if upload:
-				print("Upload successful for release {}".format(release.TOPIC))
-			sleep(5)
-		except Exception as e:
-			print("ERROR: unexpected error uploading")
-			print(e)
-			sleep(180)
+		uploader(release)
+		sleep(20)
 
 if __name__ == '__main__':
 	main()
