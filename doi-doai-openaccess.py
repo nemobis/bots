@@ -158,7 +158,8 @@ def main(argv=None):
                 pdf = get_oadoi(doi)
                 if pdf:
                     print(doi)
-                    get_doi_download(doi, pdf)
+                    if args['--download']:
+                        get_doi_download(doi, pdf)
             else:
                 if get_doai_oa(doi):
                     print(doi)
@@ -243,7 +244,10 @@ def get_oadoi(doi):
         return False
 
     if oadoi:
-        return oadoi['url_for_pdf']
+        if oadoi['url_for_pdf']:
+            return oadoi['url_for_pdf']
+        else:
+            return oadoi['url']
     else:
         return None
 
