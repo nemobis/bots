@@ -8,13 +8,14 @@ Requires Wikimedia Labs labsdb local access.
 Usage:
     doi-doai-openaccess.py --help
     doi-doai-openaccess.py [--depositable] [--oadoi] [--dbcnf=DBCNF]
-    [--list=FILE | <dbname>] [--download]
+    [--list=FILE | <dbname>] [--download] [--export]
 
 Options:
     --help           Prints this documentation.
     --depositable    Lists closed access DOIs which could be deposited.
     --download       Download the PDF from the OA URL retrieved from oaDOI.
     --oadoi          Use the Unpaywall (oaDOI) API instead of DOAI.
+    --export         Write a CSV with the OA URLs to dois.csv or [list].csv.
     --list=FILE      Reads the DOIs from a text file rather than the database.
     --dbcnf=DBCNF    The configuration file with credentials
                      [default: ~/.my.cnf]
@@ -34,12 +35,18 @@ import sys
 import time
 from contextlib import contextmanager
 from codecs import open
-
+try:
+    import unicodecsv as csv
+except ImportError:
+    import csv as csv
 import docopt
 import requests
 import requests.exceptions
 import urllib3.exceptions
-import pymysql as dbclient
+try:
+    import pymysql as dbclient
+except ImportError:
+    print('WARNING: No pymysql, cannot query the DB')
 
 if sys.version_info >= (3,):
     from urllib.parse import unquote, quote_plus
@@ -114,6 +121,13 @@ def main(argv=None):
     else:
         doilist = get_doi_el(wiki, dbcnf).union(get_doi_iwl(wiki, dbcnf))
 
+    if args['--export']:
+        export = open((args['--list'] or 'dois') + '.csv', 'a')
+        writer = csv.writer(export,
+                            delimiter='\t',
+                            lineterminator='\n')
+        writer.writerow([u'DOI', u'best_oa_location', u'host_type'])
+
     if args['--depositable'] and not args['--oadoi']:
         for doi in doilist:
             doi = doi.strip()
@@ -155,14 +169,20 @@ def main(argv=None):
         for doi in doilist:
             doi = doi.strip()
             if args['--oadoi']:
-                pdf = get_oadoi(doi)
+                pdf, host_type = get_oadoi(doi)
                 if pdf:
                     print(doi)
                     if args['--download']:
                         get_doi_download(doi, pdf)
+                    if args['--export']:
+                        writer.writerow([doi, pdf, host_type])
+
             else:
                 if get_doai_oa(doi):
                     print(doi)
+
+        if args['--export']:
+            export.close()
 
 
 def get_doi_el(wiki, dbcnf):
@@ -245,11 +265,11 @@ def get_oadoi(doi):
 
     if oadoi:
         if oadoi['url_for_pdf']:
-            return oadoi['url_for_pdf']
+            return oadoi['url_for_pdf'], oadoi['host_type']
         else:
-            return oadoi['url']
+            return oadoi['url'], oadoi['host_type']
     else:
-        return None
+        return None, None
 
 
 def get_dissemin_pdf(doi):
@@ -269,6 +289,7 @@ def get_dissemin_pdf(doi):
 
     return
 
+
 def get_doi_download(doi, url):
     """ Given an URL, download the PDF and save in current directory. """
     try:
@@ -287,6 +308,7 @@ def get_doi_download(doi, url):
     except UnicodeError:
         # UnicodeDecodeError: 'utf-8' codec can't decode byte ...: invalid continuation byte
         return None
+
 
 def is_depositable(doi):
     # JSON requires 2.4.2
