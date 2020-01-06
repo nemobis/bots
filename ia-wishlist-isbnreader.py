@@ -13,7 +13,6 @@ __version__ = '0.1.0'
 
 import cmd
 from isbnlib import meta
-import isbnlib.dev._exceptions
 import requests
 import sys
 
@@ -45,7 +44,7 @@ class IsbnWishlistShell(cmd.Cmd):
 				try:
 					data = meta(arg, service="openl")
 					print("{}\t{}\t{}\t{}".format(data["ISBN-13"], data["Title"], "; ".join(data["Authors"]), data["Year"]))
-				except isbnlib.dev._exceptions.NoDataForSelectorError:
+				except:
 					print("INFO: OpenLibrary.org does not known this ISBN")
 		else:
 			print("ISBN not wanted: {}".format(arg))
@@ -79,10 +78,5 @@ class IsbnWishlistShell(cmd.Cmd):
 			self.file.close()
 			self.file = None
 
-def parse(arg):
-	"Convert a series of zero or more numbers to an argument tuple"
-	return tuple(map(int, arg.split()))
-
 if __name__ == '__main__':
-	
 	IsbnWishlistShell().cmdloop()
