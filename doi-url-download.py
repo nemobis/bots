@@ -32,21 +32,28 @@ def getDriver():
 
 def downloadUrl(driver, url=None):
     actions = webdriver.ActionChains(driver)
-    driver.get(url)
-    sleep(1)
     try:
-        elem = driver.find_element_by_css_selector(".stats-document-lh-action-downloadPdf_2")
+        driver.get(url)
+        sleep(random.randint(200, 900))
+        elem = driver.find_element_by_css_selector(".icon-pdf-download") #.stats-document-lh-action-downloadPdf_2")
     except selenium.common.exceptions.NoSuchElementException:
-        print "Could not click on %s" % url
+        print "WARNING: Could not click on %s" % url
+        return
+    except selenium.common.exceptions.TimeoutException:
+        print "ERROR: Selenium timeout"
+        return
+    except:
+        print "ERROR: Unknown error when downloading"
+        sleep(random.randint(30, 180))
         return
     actions.click(elem)
     actions.perform()
-    sleep(random.randint(10, 40))
 
 def main(argv=None):
     #with Xvfb() as xvfb:
     with open('urls.txt', 'rb') as urls:
         driver = getDriver()
+        sleep(300)
         for url in urls.readlines():
             downloadUrl(driver, url.strip())
 
