@@ -176,9 +176,11 @@ def main(argv=None):
                         get_doi_download(doi, pdf)
                     if args['--export']:
                         writer.writerow([doi, pdf, host_type])
-
             else:
-                if get_doai_oa(doi):
+                if args['--download']:
+                    get_doi_download_fatcat(doi)
+                else:
+                    get_doai_oa(doi)
                     print(doi)
 
         if args['--export']:
@@ -309,6 +311,33 @@ def get_doi_download(doi, url):
         # UnicodeDecodeError: 'utf-8' codec can't decode byte ...: invalid continuation byte
         return None
 
+def get_doi_download_fatcat(doi):
+    """ Given a DOI, download the PDF from fatcat and save in current directory. """
+    try:
+        req = SESSION.head("https://fatcat.wiki/release/lookup?doi={}".format(doi), timeout=2)
+        fatcatid = req.headers['Location'].split('/')[-1]
+        fatcat = SESSION.get("https://api.fatcat.wiki/v0/release/{}?expand=files".format(fatcatid), timeout=2)
+        for copy in fatcat.json()['files']:
+            if copy['mimetype'] != "application/pdf":
+                continue
+            for location in copy['urls']:
+                if location['rel'] == "webarchive" or location['rel'] == "repository":
+                    print("Found DOI: {} at URL: {}".format(doi, location['url']))
+                    pdf = SESSION.get(location['url'], timeout=10)
+                    if pdf.headers['Content-Type'] == 'application/pdf':
+                        out = open("{}.pdf".format(quote_plus(doi)), 'wb')
+                        out.write(pdf.content)
+                        out.close()
+                        return True
+        return None
+    except KeyError:
+        return None
+    except requests.exceptions.ConnectionError:
+        return None
+    except urllib3.exceptions.MaxRetryError:
+        return False
+    except requests.exceptions.RetryError:
+        return False
 
 def is_depositable(doi):
     # JSON requires 2.4.2
