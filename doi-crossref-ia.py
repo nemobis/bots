@@ -8,6 +8,7 @@
 #
 __version__ = '0.1.0'
 from internetarchive import upload
+import os
 try:
 	from urllib import quote_plus
 except:
@@ -60,6 +61,10 @@ if __name__ == '__main__':
 	dois = open('dois.txt', 'r')
 	for doi in dois.readlines():
 		doi = doi.strip()
-		print("Looking up DOI: {}".format(doi))
-		threading.Thread(target=worker, args=[doi]).start()
-		sleep(8)
+		#print("Looking up DOI: {}".format(doi))
+		identifier = 'paper-doi-' + re.sub('[^-_A-Za-z0-9]', '_', doi)[:89]
+		os.system('mv {}_text.pdf {}.pdf'.format(identifier, quote_plus(doi)))
+		upload_doi(doi)
+		sleep(1)
+		#threading.Thread(target=worker, args=[doi]).start()
+		#sleep(2)
