@@ -63,8 +63,9 @@ def downloadDay(day):
 	""" Retrieve data for issue, prepare files and download images """
 
 	day_ymd = day.strftime('%Y-%m-%d')
+	incomplete = None
 	identifier = getDayId(day)
-	print("Found {} for {}".format(identifier, day.strftime('%Y-%m-%d')))
+	print("INFO: Found {} for {}".format(identifier, day.strftime('%Y-%m-%d')))
 	metadata = getIssueMetadata(identifier)
 	sleep(0.1)
 	if not metadata:
@@ -73,7 +74,7 @@ def downloadDay(day):
 
 	if not makeDay(day, metadata):
 		# We got a different day, probably there's a gap for festivities.
-		return False
+		return None
 
 	# Prepare a session for this issue
 	s = requests.Session()
@@ -94,7 +95,8 @@ def downloadDay(day):
 		page_image = s.get('http://www.archiviolastampa.it/load.php?url=/downloadContent.do?id={}_19344595&s={}'.format(page_id, t))
 		sleep(0.2)
 		if not 'image/jpeg' in page_image.headers['Content-Type']:
-			print("WARNING: could not download image for {}".format(page_id))
+			print("WARNING: could not download an image for {}".format(page_id))
+			incomplete = True
 			sleep(5)
 			continue
 		with open('{}/{}.jpg'.format(day_ymd, page_id), 'wb') as page_out:
@@ -104,6 +106,10 @@ def downloadDay(day):
 		with open('{}/{}_pagedata.json'.format(day_ymd, page_id), 'w') as page_meta:
 			page_meta.write(page_data.text)
 		sleep(0.1)
+
+	if incomplete:
+		return False
+	return True
 
 def listDates(start, end):
 	""" Return list of days between two dates """
@@ -121,6 +127,9 @@ def main():
 		except Exception as e:
 			print(e)
 			download = False
+		if download is None:
+			print("INFO: Nothing to do for {}".format(day))
+			continue
 		if download is False:
 			print("ERROR: Something went wrong with {}, please retry. Sleeping now.".format(day))
 			retry.write("{}\n".format(day))
