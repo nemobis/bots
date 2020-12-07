@@ -13,6 +13,7 @@ import json
 import os
 import re
 import requests
+import sys
 from time import sleep
 
 def getDayId(day, headboard='01'):
@@ -38,7 +39,7 @@ def getIssueMetadata(identifier):
 
 	# Expected output is something like:
 	# {"id_testata":"02","uscita":"243","data_uscita":"1989-09-13 00:00:00","nome_testata":"Europa"} 
-	if info.status_code < 300:
+	if info.status_code < 300 and "data_uscita" in info.text:
 		return info.json()
 
 def makeDay(day, metadata):
@@ -59,18 +60,22 @@ def makeDay(day, metadata):
 		# We got a different day, probably there's a gap for festivities.
 		return False
 
-def downloadDay(day):
+def downloadDay(day, headboard='01'):
 	""" Retrieve data for issue, prepare files and download images """
 
 	day_ymd = day.strftime('%Y-%m-%d')
 	incomplete = None
-	identifier = getDayId(day)
+	identifier = getDayId(day, headboard)
 	print("INFO: Found {} for {}".format(identifier, day.strftime('%Y-%m-%d')))
 	metadata = getIssueMetadata(identifier)
 	sleep(0.1)
 	if not metadata:
+		# Sometimes the response is simply an empty page, for instance:
+		# INFO: Found 1066_01_1980_0230_0002 for 1980-10-20
+		# Expecting value: line 1 column 1 (char 0)
 		print("WARNING: could not download metadata for {}".format(day_ymd))
-		return False
+		# Just keep going. TODO: Some logging?
+		metadata = {'data_uscita': day_ymd}
 
 	if not makeDay(day, metadata):
 		# We got a different day, probably there's a gap for festivities.
@@ -93,11 +98,11 @@ def downloadDay(day):
 	for page in pages.json()['pageList']:
 		page_id = page['thumbnailId']
 		page_image = s.get('http://www.archiviolastampa.it/load.php?url=/downloadContent.do?id={}_19344595&s={}'.format(page_id, t))
-		sleep(0.2)
+		sleep(1.0)
 		if not 'image/jpeg' in page_image.headers['Content-Type']:
 			print("WARNING: could not download an image for {}".format(page_id))
 			incomplete = True
-			sleep(5)
+			sleep(30)
 			continue
 		with open('{}/{}.jpg'.format(day_ymd, page_id), 'wb') as page_out:
 			page_out.write(page_image.content)
@@ -111,18 +116,22 @@ def downloadDay(day):
 		return False
 	return True
 
-def listDates(start, end):
+def listDates(start='1867-02-09', end='2005-12-31'):
 	""" Return list of days between two dates """
 
 	first_day = datetime.datetime.strptime(start, '%Y-%m-%d')
 	last_day = datetime.datetime.strptime(end, '%Y-%m-%d')
 	return [first_day + datetime.timedelta(days=x) for x in range(0, (last_day-first_day).days)]
 
-def main():
+def main(argv=None):
 	retry = open('retry.log', 'a')
-	for day in listDates('1868-01-01', '2005-12-31'):
+	for day in listDates(argv[2], argv[3]):
+		day_ymd = day.strftime('%Y-%m-%d')
+		if os.path.isdir(day_ymd):
+			print("INFO: Day {} was already done".format(day_ymd))
+			continue
 		try:
-			download = downloadDay(day)
+			download = downloadDay(day, headboard=argv[1])
 			sleep(2)
 		except Exception as e:
 			print(e)
@@ -137,4 +146,4 @@ def main():
 			
 	retry.close()
 if __name__ == "__main__":
-	main()
+	main(sys.argv)
