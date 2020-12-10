@@ -66,6 +66,7 @@ def downloadDay(day, headboard='01'):
 	day_ymd = day.strftime('%Y-%m-%d')
 	incomplete = None
 	identifier = getDayId(day, headboard)
+	# TODO: Add a timestamp so it's easier to spot stuck downloaders.
 	print("INFO: Found {} for {}".format(identifier, day.strftime('%Y-%m-%d')))
 	metadata = getIssueMetadata(identifier)
 	sleep(0.1)
@@ -82,6 +83,7 @@ def downloadDay(day, headboard='01'):
 		return None
 
 	# Prepare a session for this issue
+	# TODO: Add a timeout here or to requests.
 	s = requests.Session()
 	# We need the parameter from the hidden input
 	# <input type="hidden" name="t" value="a2016dedff5843c652d2fdf4f87055cc" />
@@ -98,6 +100,8 @@ def downloadDay(day, headboard='01'):
 	for page in pages.json()['pageList']:
 		page_id = page['thumbnailId']
 		page_image = s.get('http://www.archiviolastampa.it/load.php?url=/downloadContent.do?id={}_19344595&s={}'.format(page_id, t))
+		# TODO: might want to handle connection errors
+		# HTTPConnectionPool(host='www.archiviolastampa.it', port=80): Max retries exceeded with url: ... (Caused by NewConnectionError('<requests.packages.urllib3.connection.HTTPConnection object at 0x7f8a235d1c88>: Failed to establish a new connection: [Errno 110] Connection timed out',))
 		sleep(1.0)
 		if not 'image/jpeg' in page_image.headers['Content-Type']:
 			print("WARNING: could not download an image for {}".format(page_id))
@@ -121,7 +125,7 @@ def listDates(start='1867-02-09', end='2005-12-31'):
 
 	first_day = datetime.datetime.strptime(start, '%Y-%m-%d')
 	last_day = datetime.datetime.strptime(end, '%Y-%m-%d')
-	return [first_day + datetime.timedelta(days=x) for x in range(0, (last_day-first_day).days)]
+	return [first_day + datetime.timedelta(days=x) for x in range(0, (last_day-first_day).days+1)]
 
 def main(argv=None):
 	retry = open('retry.log', 'a')
