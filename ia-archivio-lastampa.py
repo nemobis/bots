@@ -8,13 +8,16 @@
 #
 __version__ = '0.1.0'
 
+import csv
 import datetime
 import json
 import os
+from pathlib import Path
 import re
 import requests
 import sys
 from time import sleep
+import zipfile
 
 def getDayId(day, headboard='01'):
 	"""
@@ -53,6 +56,7 @@ def makeDay(day, metadata):
 			print("INFO: Day {} was already done".format(day_ymd))
 			return False
 
+		# FIXME: Should use cross-platform path joining here and below.
 		with open('{}/issue_metadata.json'.format(day_ymd), 'w') as jsonout:
 			jsonout.write(json.dumps(metadata))
 		return True
@@ -127,7 +131,54 @@ def listDates(start='1867-02-09', end='2005-12-31'):
 	last_day = datetime.datetime.strptime(end, '%Y-%m-%d')
 	return [first_day + datetime.timedelta(days=x) for x in range(0, (last_day-first_day).days+1)]
 
+def getDayCounts(day):
+	""" Return imagecount, pagecount and identifier from the files in a day directory """
+
+	imagecount = 0
+	pagecount = 0
+	identifier = ''
+	for dayfile in Path(day).iterdir():
+		if dayfile.name.endswith('_images.zip'):
+			arc = zipfile.ZipFile(day + '/' + dayfile.name)
+			imagecount = len([image.filename for image in arc.infolist() if image.filename.endswith('jpg')])
+		if dayfile.name.endswith('_pages.json'):
+			identifier = dayfile.name.replace('_pages.json', '')
+			with open(day + '/' + dayfile.name, 'r') as j:
+				try:
+					pages = json.load(j)
+					pagecount = len(pages['pageList'])
+				except json.decoder.JSONDecodeError:
+					print("WARNING: Could not open JSON for day {}".format(day))
+					pass
+	return imagecount, pagecount, identifier
+
+def verifyDirectory():
+	""" Verify the contents of the archives of the current directory """
+
+	complete = True
+	csvout = open('issue-counts.csv', 'w')
+	writer = csv.writer(csvout,
+			delimiter='\t',
+			lineterminator='\n',
+			quoting=csv.QUOTE_MINIMAL,
+			)
+	writer.writerow(['Date', 'Image count', 'Page count', 'Identifier'])
+
+	days = set([d.name for d in Path('.').iterdir() if re.match('[0-9-]{10}', d.name)])
+	for day in days:
+		imagecount, pagecount, identifier = getDayCounts(day)
+		if imagecount > 0 and pagecount > 0 and imagecount != pagecount:
+			print("ERROR: Day {} has {} images for {} expected pages".format(day, imagecount, pagecount))
+			complete = False
+		writer.writerow([day, imagecount, pagecount, identifier])
+
+	return complete
+
 def main(argv=None):
+	# TODO: Hacky commandline arguments!
+	if argv[1] == "verify":
+		return verifyDirectory()
+
 	retry = open('retry.log', 'a')
 	for day in listDates(argv[2], argv[3]):
 		day_ymd = day.strftime('%Y-%m-%d')
@@ -136,6 +187,7 @@ def main(argv=None):
 			continue
 		try:
 			download = downloadDay(day, headboard=argv[1])
+			# TODO: Also take care of compression and verification
 			sleep(2)
 		except Exception as e:
 			print(e)
