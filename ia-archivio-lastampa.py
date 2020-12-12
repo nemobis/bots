@@ -6,10 +6,11 @@
 #
 # Distributed under the terms of the MIT license.
 #
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 
 import csv
 import datetime
+from internetarchive import get_item, upload
 import json
 import os
 from pathlib import Path
@@ -44,6 +45,22 @@ def getIssueMetadata(identifier):
 	# {"id_testata":"02","uscita":"243","data_uscita":"1989-09-13 00:00:00","nome_testata":"Europa"} 
 	if info.status_code < 300 and "data_uscita" in info.text:
 		return info.json()
+
+def readIssueMetadata(day):
+	""" Read issue metadata from the JSON saved in the day's directory, return title and issue """
+
+	nome_testata = "La Stampa"
+	uscita = None
+	with open(day + '/issue_metadata.json', 'r') as j:
+		try:
+			metadata = json.load(j)
+			title = metadata.get('nome_testata', 'La Stampa')
+			issue = metadata.get('uscita', None)
+			id_testata = metadata.get('id_testata', '01')
+		except json.decoder.JSONDecodeError:
+			print("WARNING: Could not open JSON for day {}".format(day))
+			return
+		return title, issue, id_testata
 
 def makeDay(day, metadata):
 	""" Prepare the download of this day, if appropriate """
@@ -174,10 +191,82 @@ def verifyDirectory():
 
 	return complete
 
+def getBasicItemData():
+	""" Return a dictionary with the metadata which is the same for all Internet Archive items """
+
+	metadata = {
+		"collection": "opensource",
+		"licenseurl": "https://creativecommons.org/licenses/by-nc-nd/2.5/it/",
+		"mediatype": "texts",
+		"subject": "newspapers; giornali; La Stampa; Archivio Storico La Stampa",
+		"creator": "Editrice La Stampa",
+		"contributor": "CSI Piemonte",
+		"fixed-ppi": 300,
+		"sponsor": "Comitato per la Biblioteca dell'Informazione Giornalistica; CBDIG; Regione Piemonte; Compagnia di San Paolo; Fondazione CRT; Editrice La Stampa",
+		"journaltitle": "La Stampa",
+		"title": "La Stampa",
+		"language": "Italian",
+		"publisher": "Editrice La Stampa S.p.A.",
+		"publisher_location": "Torino, Italia",
+		"originalurl": "http://www.archiviolastampa.it/", # TODO: "source" does not seem to do much good
+		"notes": "Per i titoli, le parole chiave e il testo contenuti fare riferimento all'OCR originale di ciascuna pagina all'interno dell'archivio allegato con suffisso _pagedata.zip (pulsante \"ZIP\" sotto \"Download options\"), altrimenti si faccia uso del nuovo OCR indicizzato dal motore di ricerca di Internet Archive e mostrato negli altri documenti allegati.",
+		"rights": """This work or parts of this work may be in the public domain. The publisher, Editrice La Stampa, while distributing the scans under cc-by-nc-nd-2.5-it license, made the following claims. ∎ Le singole pagine di ciascun numero (ma non il numero considerato nella sua interezza) dei quotidiani "La Stampa" e "Stampa Sera" e delle altre pubblicazioni dell'Editrice La Stampa S.p.A. presenti all'interno dell'Archivio Storico sono rilasciate in licenza Creative Commons Attribuzione - Non commerciale - Non opere derivate 2.5.
+https://creativecommons.org/licenses/by-nc-nd/2.5/legalcode.it
+Nella successiva riproduzione e distribuzione delle pagine dei quotidiani "La Stampa" e "Stampa Sera" e delle altre pubblicazioni dell'Editrice La Stampa S.p.A. presenti all'interno dell'Archivio Storico, l'utente è tenuto ad indicare - come autore dell'Opera - l'Editrice La Stampa S.p.A. e menzionare la fonte da cui tale Opera è stata tratta.
+I numeri del quotidiano "La Stampa" e "Stampa Sera" e delle altre pubblicazioni dell'Editrice La Stampa S.p.A. pubblicati per la prima volta da oltre 70 anni sono ovviamente di pubblico dominio e liberamente utilizzabili, in tutto o in parte, dagli utenti al di fuori dei termini della licenza Creative Commons, fermo restando l'obbligo di indicare l'autore dell'opera.
+La licenza Creative Commons non ha ad oggetto i singoli articoli, individualmente considerati, pubblicati sul quotidiano "La Stampa" e "Stampa Sera" e sulle altre pubblicazioni dell'Editrice La Stampa S.p.A. presenti all'interno dell'Archivio Storico, la cui riproduzione è pertanto vietata. Gli articoli di autori deceduti da oltre 70 anni sono tuttavia di pubblico dominio e liberamente utilizzabili dagli utenti, fermo restando l'obbligo di indicare l'autore dell'articolo. Restano, inoltre, impregiudicati i diritti di utilizzo dei singoli articoli riconosciuti dalla legge sul diritto d'autore (Legge 22 aprile 1941 n. 633 e successive modifiche), nei casi ed entri i limiti previsti dalla legge medesima.
+La licenza Creative Commons non ha ad oggetto la banca dati dell'Archivio Storico: è conseguentemente vietata l'estrazione e il reimpiego della totalità o di una parte sostanziale del contenuto di tale banca dati. Restano impregiudicati i diritti sulla banca dati riconosciuti dalla legge sul diritto d'autore (Legge 22 aprile 1941 n. 633 e successive modifiche), nei casi ed entri i limiti previsti dalla legge medesima.
+La licenza Creative Commons non ha ad oggetto le singole foto ed i singoli articoli, individualmente considerati, pubblicati sul quotidiano "La Stampa" e "Stampa Sera" e sulle altre pubblicazioni dell'Editrice La Stampa S.p.A. presenti all'interno dell'Archivio Storico, la cui riproduzione è pertanto vietata.""",
+	}
+
+	return metadata
+
+def uploadDay(day):
+	""" Upload the archives in the directory for this day to the Internet Archive """
+
+	imagecount, pagecount, stampaid = getDayCounts(day)
+	md = getBasicItemData()
+	md["title"], md["issue"], id_testata = readIssueMetadata(day)
+	md["title"] = md["title"] + " ({})".format(day)
+	md["external-identifier"] = "urn:archiviolastampa:{}".format(stampaid)
+	# md["originalurl"] = "http://www.archiviolastampa.it/index2.php?option=com_lastampa&task=issue&no_html=1&type=info&issueid={}".format(stampaid)
+	md["date"] = day
+	md["pages"] = pagecount
+	md["description"] = "Numero intero del giorno {} dall'archivio storico La Stampa.".format(day)
+
+	# TODO: Needle defaults to 01. Maybe read the prefix in the actual files instead?
+	if id_testata == "02":
+		identifier = "stampa-sera_{}".format(day)
+	else:
+		identifier = "lastampa_{}".format(day)
+
+	try:
+		item = get_item(identifier)
+		if item and item.item_size:
+			print("INFO: Day {} was already uploaded at {}, size {}. Skipping.".format(day, identifier, item.item_size))
+			return True
+
+		iafiles = [day + '/' + arc.name for arc in Path(day).iterdir()]
+		print("INFO: Uploading day {} with {} files".format(day, len(iafiles)))
+		r = upload(identifier, files=iafiles, metadata=md, retries=5, retries_sleep=300)
+		if r[0].status_code < 400:
+			return True
+	except Exception as e:
+		print("ERROR: Upload failed for day {}".format(day))
+		print(e)
+		return False
+
 def main(argv=None):
-	# TODO: Hacky commandline arguments!
+	# TODO: Hacky commandline arguments are hacky!
 	if argv[1] == "verify":
 		return verifyDirectory()
+
+	if argv[1] == "upload":
+		days = set([d.name for d in Path('.').iterdir() if re.match('[0-9-]{10}', d.name)])
+		for day in sorted(list(days)):
+			uploadDay(day)
+			sleep(5)
+		return
 
 	retry = open('retry.log', 'a')
 	for day in listDates(argv[2], argv[3]):
