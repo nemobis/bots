@@ -43,15 +43,15 @@ def getAbebooks(isbn, fulltitle=None, keywords=None):
 	listing = html.fromstring( r )
 	price = listing.xpath('//div[@id="srp-item-price-1"]/text()')[0]
 	seller = listing.xpath('//a[text()="Informazioni sul venditore"]/@href')[0] or ''
-	title = listing.xpath('//div[@id="book-1"]//h2/a[@itemprop="url"]/@title')[0] or ''
-	description = listing.xpath('//div[@id="book-1"]//p[contains(@class, "p-md-t")]/span[contains(.," 19") or contains(.," 20")]/text()') or ''
+	title = listing.xpath('//li[@id="book-1"]//h2[@itemprop="offers"]/a[@itemprop="url"]/span/text()')[0] or ''
+	description = listing.xpath('//li[@id="book-1"]//p[contains(@class, "p-md-t")]/span[contains(.," 19") or contains(.," 20")]/text()') or ''
 
 	if not isbn:
-		isbn = listing.xpath('//div[@id="book-1"]//p[contains(@class, "isbn")]//a/@title')[-1]
+		isbn = listing.xpath('//li[@id="book-1"]//p[contains(@class, "isbn")]//a/@title')[-1]
 	if description:
 		year = re.findall(r'\b(?:19|20)[0-9]{2}\b', description[0])[0]
 	if 'Anybook' in seller:
-		notes = listing.xpath('//div[@id="book-1"]//p[contains(@class, "p-md-t")]/text()')[0].strip().replace('Codice articolo ', '')
+		notes = listing.xpath('//li[@id="book-1"]//p[contains(@class, "p-md-t")]/text()')[0].strip().replace('Codice articolo ', '')
 	return [isbn, seller, price, title, year, notes]
 
 def getAlibris(isbn):
@@ -122,19 +122,21 @@ def main():
 				writer.writerow(offer)
 				print("INFO: Found {}".format(offer[0]))
 			else:
-				print("NOTICE: Not found")
+				print("NOTICE: Not found: {}".format(isbn))
 			sleep(0.1)
-		except IndexError:
-			print("NOTICE: Not found")
+		except IndexError as e:
+			print("NOTICE: Not found: {}".format(isbn))
 		except requests.exceptions.ConnectionError:
 			print("WARNING: Connection error. Sleeping.")
 			sleep(5)
 		except requests.exceptions.ReadTimeout:
 			print("WARNING: Connection timeout. Sleeping.")
 			sleep(15)
-		#except:
-		#	print("ERROR: Unexpected exception")
-		#	pass
+		except Exception as e:
+			print("ERROR: Unexpected exception")
+			print(e)
+			sleep(30)
+			pass
 
 	wishlist.close()
 	offerings.close()
