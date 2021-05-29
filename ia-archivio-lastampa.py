@@ -1,16 +1,18 @@
 #!/usr/bin/python3
 # -*- coding: utf-8  -*-
-""" Bot to download archiviolastampa.it """
+""" Bot to download archiviolastampa.it and upload it to the Internet Archive """
 #
 # (C) Federico Leva, 2020
 #
 # Distributed under the terms of the MIT license.
 #
-__version__ = '0.2.0'
+__version__ = '0.3.0'
 
+import collections
+import concurrent.futures
 import csv
 import datetime
-from internetarchive import get_item, upload
+from internetarchive import get_item, search_items, upload
 import json
 import os
 from pathlib import Path
@@ -19,6 +21,10 @@ import requests
 import sys
 from time import sleep
 import zipfile
+try:
+	import nltk
+except ImportError:
+	print("WARNING: could not import nltk, cannot add subjects. Remember to also install data with: python3 -m nltk.downloader punkt snowball_data stopwords ")
 
 def getDayId(day, headboard='01'):
 	"""
@@ -56,7 +62,7 @@ def readIssueMetadata(day):
 			metadata = json.load(j)
 			title = metadata.get('nome_testata', 'La Stampa')
 			issue = metadata.get('uscita', None)
-			id_testata = metadata.get('id_testata', '01')
+			id_testata = metadata.get('id_testata', '02')
 		except json.decoder.JSONDecodeError:
 			print("WARNING: Could not open JSON for day {}".format(day))
 			return
@@ -195,7 +201,7 @@ def getBasicItemData():
 	""" Return a dictionary with the metadata which is the same for all Internet Archive items """
 
 	metadata = {
-		"collection": "opensource",
+		"collection": "la-stampa-newspaper",
 		"licenseurl": "https://creativecommons.org/licenses/by-nc-nd/2.5/it/",
 		"mediatype": "texts",
 		"subject": "newspapers; giornali; La Stampa; Archivio Storico La Stampa",
@@ -224,9 +230,14 @@ La licenza Creative Commons non ha ad oggetto le singole foto ed i singoli artic
 def uploadDay(day):
 	""" Upload the archives in the directory for this day to the Internet Archive """
 
-	imagecount, pagecount, stampaid = getDayCounts(day)
-	md = getBasicItemData()
-	md["title"], md["issue"], id_testata = readIssueMetadata(day)
+	try:
+		imagecount, pagecount, stampaid = getDayCounts(day)
+		md = getBasicItemData()
+		md["title"], md["issue"], id_testata = readIssueMetadata(day)
+	except FileNotFoundError:
+		# Handle: FileNotFoundError: [Errno 2] No such file or directory: '1997-11-11/issue_metadata.json'
+		print("WARNING: Day {} failed upon reading files".format(day))
+		return False
 	md["title"] = md["title"] + " ({})".format(day)
 	md["external-identifier"] = "urn:archiviolastampa:{}".format(stampaid)
 	# md["originalurl"] = "http://www.archiviolastampa.it/index2.php?option=com_lastampa&task=issue&no_html=1&type=info&issueid={}".format(stampaid)
@@ -242,19 +253,51 @@ def uploadDay(day):
 
 	try:
 		item = get_item(identifier)
-		if item and item.item_size:
+		if item and item.item_size and item.item_size > 5000000:
 			print("INFO: Day {} was already uploaded at {}, size {}. Skipping.".format(day, identifier, item.item_size))
 			return True
 
 		iafiles = [day + '/' + arc.name for arc in Path(day).iterdir()]
 		print("INFO: Uploading day {} with {} files".format(day, len(iafiles)))
 		r = upload(identifier, files=iafiles, metadata=md, retries=5, retries_sleep=300)
+		sleep(5)
 		if r[0].status_code < 400:
 			return True
+	# FIXME: Specifically handle the various failures, like:
+	# ResponseError('too many 502 error responses')
+	# Please reduce your request rate. - total_tasks_queued exceeds global_limit
 	except Exception as e:
 		print("ERROR: Upload failed for day {}".format(day))
 		print(e)
 		return False
+
+def getDaySubjects(identifier):
+	""" Attempt to add subjects based on the 50 most frequent n-grams in this IA item """
+
+	# Cf. https://www.nltk.org/api/nltk.tokenize.html#module-nltk.tokenize
+	# https://agailloty.rbind.io/en/project/nlp_clean-text/
+	# https://stackoverflow.com/a/58656665
+	# print("INFO: Planning to add the following words to {}".format(identifier))
+	r = requests.get("https://archive.org/download/{}/{}_djvu.txt".format(identifier, identifier))
+	tokens = nltk.tokenize.word_tokenize(r.text, language="italian")
+	tokens = [word.lower() for word in tokens if word.isalnum() and not word in nltk.corpus.stopwords.words("italian")]
+	grams = nltk.FreqDist(nltk.everygrams(tokens, min_len=2, max_len=5))
+	commongrams = [ " ".join(gram[0]) for gram in grams.most_common() if gram[1] > 3][:50]
+	return commongrams
+
+def getDaySubjectsAll(query):
+	""" Attempt to add subjects based on the most frequent n-grams in the items returned by the query """
+	subjects = {}
+	allsubjects = []
+
+	identifiers = [item['identifier'] for item in search_items(query)]
+	with concurrent.futures.ProcessPoolExecutor() as executor:
+		for item, itemsubjects in zip(identifiers, executor.map(getDaySubjects, identifiers)):
+			subjects[item] = itemsubjects
+	for key, value in subjects.items():
+		allsubjects += value
+	frequentsubjects = [subject[0] for subject in collections.Counter(allsubjects).most_common(100)]
+	print("INFO: Would discard the following frequent subjects: {}".format("; ".join(frequentsubjects)))
 
 def main(argv=None):
 	# TODO: Hacky commandline arguments are hacky!
@@ -263,10 +306,16 @@ def main(argv=None):
 
 	if argv[1] == "upload":
 		days = set([d.name for d in Path('.').iterdir() if re.match('[0-9-]{10}', d.name)])
-		for day in sorted(list(days)):
-			uploadDay(day)
-			sleep(5)
+		with concurrent.futures.ProcessPoolExecutor(max_workers=2) as executor:
+			for upload in executor.map(uploadDay, sorted(list(days))):
+				pass
 		return
+
+	if argv[1] == "allsubjects":
+		return getDaySubjectsAll(argv[2])
+
+	if argv[1] == "subjects":
+		return getDaySubjects(argv[2])
 
 	retry = open('retry.log', 'a')
 	for day in listDates(argv[2], argv[3]):
