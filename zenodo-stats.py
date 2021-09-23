@@ -4,58 +4,82 @@
 Script to count usage of Zenodo records.
 """
 #
-# (C) Federico Leva, 2019
+# (C) Federico Leva, 2019-2021
 #
 # Distributed under the terms of the MIT license.
 #
-__version__ = '0.1.0'
-import grequests
-import random
-from sickle import Sickle
+__version__ = '0.2.0'
+from datetime import datetime
+import requests
+from time import sleep
+from urllib.parse import quote_plus
 
 views = 0
 downloads = 0
 items = 0
-rs = []
-oai = Sickle('https://zenodo.org/oai2d')
 i = 0
+recids = set()
+today = datetime.today().toordinal()
+minday = datetime(1990, 1, 1).toordinal()
+batchdays = 10
 
-identifiers = random.sample(range(1,3500000), 5000)
-"""
-# Get the list of all actual records
-for record in oai.ListRecords(metadataPrefix='oai_dc', ignore_deleted=True):
-	items += 1
-	if items % 1000 == 0:
-		print("Listed {} records so far".format(items))
-	identifiers += record.header.identifier.replace("oai:zenodo.org:", "")
-items = 0
-"""
-
-for identifier in identifiers:
-	i +=1
-	rs.append(grequests.get('http://zenodo.org/api/records/{}'.format(identifier),
-						 headers={'Accept': 'application/vnd.zenodo.v1+json'}) )
-
-	if i < 10:
+for day in range(minday, today):
+	# Request a sufficiently small range to remain under 10k records
+	if not day % batchdays == 0:
 		continue
+	datefrom = datetime.fromordinal(day).isoformat()[:10]
+	dateto = datetime.fromordinal(day+batchdays-1).isoformat()[:10]
+	daterange = quote_plus("[{} TO {}]".format(datefrom, dateto))
+	records = []
+	try:
+		nextrecords = 'https://zenodo.org/api/records/?q=publication_date:{}&size=1000&sort=-mostviewed'.format(daterange)
+		while nextrecords:
+			r = requests.get(
+				nextrecords,
+				headers={'Accept': 'application/vnd.zenodo.v1+json'},
+				timeout=(20, 60)
+			)
+			records += r.json().get("hits", None).get("hits", None)
+			nextrecords = r.json().get("links", None).get("next", None)
+	except ValueError:
+		sleep(10)
+		continue
+	except AttributeError:
+		sleep(10)
+		continue
+	except requests.exceptions.RequestException:
+		sleep(60)
+		continue
+#	except Exception:
+#		# TODO: Check for connection issues vs. throttling
+#		sleep(60)
+#		continue
 
-	for response in grequests.map(rs, size=5):
-		try:
-			data = response.json()
-			# Exclude uploads via Dissem.in
-			#if 'owners' in data.keys() and 13380 not in data['owners']:
-			#	continue
-			if 'stats' in data.keys() and 'downloads' in data['stats'].keys():
-				items += 1
-				downloads += data['stats']['unique_downloads']
-				views += data['stats']['version_unique_views']
-		except ValueError:
-			continue
-		except AttributeError:
-			continue
-		finally:
-			rs = []
-			i = 0
+	for record in records:
+		# Exclude uploads via Dissem.in
+		#if 'owners' in data.keys() and 13380 not in data['owners']:
+		#	continue
 
-print("{} items got {} views and {} downloads, summing to a mean of {} each"
+		recid = record.get("conceptrecid", None)
+		if recid in recids:
+			# We already counted it
+			continue
+		else:
+			recids.add(recid)
+
+		stats = record.get("stats", None)
+		if not stats or not stats.get("downloads", None):
+			continue
+		items += 1
+		if items % 100 == 0:
+			print(".", end="", flush=True)
+		if items % 1000 == 0:
+			print("{}k".format(items / 1000), end="", flush=True)
+		downloads += stats.get('unique_downloads', 0)
+		views += stats.get('version_unique_views', 0)
+
+	# We can make maximum 60 API requests per minute
+	sleep(1)
+
+print("\n{} items got {} views and {} downloads, summing to a mean of {} each"
 	  .format(items, views, downloads, (int(views)+int(downloads))/items) )
